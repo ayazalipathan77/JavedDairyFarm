@@ -1,9 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { dbService } from '../services/db';
-import { Customer, MilkEntry, UserRole } from '../types';
-import { Calendar, Save, RotateCcw, Copy, Check, ChevronLeft, ChevronRight, SaveAll, AlertTriangle } from 'lucide-react';
+import { Customer, MilkEntry } from '../types';
+import { Calendar, Save, RotateCcw, Check, ChevronLeft, ChevronRight, SaveAll, AlertTriangle } from 'lucide-react';
 import { format, addDays } from 'date-fns';
-import { useAuth } from '../contexts/AuthContext';
 
 export default function DailyEntry() {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -12,10 +11,6 @@ export default function DailyEntry() {
   const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [isSavingAll, setIsSavingAll] = useState(false);
-  const { role } = useAuth();
-  
-  // Modal State
-  const [showCopyConfirm, setShowCopyConfirm] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -102,45 +97,6 @@ export default function DailyEntry() {
     }
   };
 
-  const executeCopyYesterday = async () => {
-    setShowCopyConfirm(false);
-    
-    const yesterday = format(addDays(new Date(date), -1), 'yyyy-MM-dd');
-    const yesterdayEntries = await dbService.getEntries(yesterday);
-    
-    const newEntries = { ...entries };
-    const newStatus = { ...savedStatus };
-    const updates: Promise<void>[] = [];
-
-    yesterdayEntries.forEach(e => {
-      // Only copy if currently 0 or default (unsaved)
-      if (!newStatus[e.customerId] || newEntries[e.customerId] === 0) {
-        newEntries[e.customerId] = e.quantity;
-        // We will mark it as unsaved so user has to confirm/save, OR we save immediately.
-        // Let's save immediately to match 'Copy' behavior expectation
-        
-        const customer = customers.find(c => c.id === e.customerId);
-        if (customer) {
-            const entry: MilkEntry = {
-              id: `${date}-${e.customerId}`,
-              customerId: e.customerId,
-              date: date,
-              quantity: e.quantity,
-              rate: customer.rate,
-              amount: e.quantity * customer.rate,
-              timestamp: Date.now()
-            };
-            updates.push(dbService.saveEntry(entry));
-            newStatus[e.customerId] = true;
-        }
-      }
-    });
-
-    await Promise.all(updates);
-    setEntries(newEntries);
-    setSavedStatus(newStatus);
-  };
-
   const changeDate = (days: number) => {
     const newDate = new Date(date);
     newDate.setDate(newDate.getDate() + days);
@@ -160,41 +116,32 @@ export default function DailyEntry() {
       {/* Date Navigator */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-10">
         <div className="flex items-center gap-4 w-full md:w-auto justify-between">
-          <button 
-            onClick={() => changeDate(-1)} 
-            className={`p-2 rounded-lg transition-colors ${role === UserRole.USER ? 'opacity-30 cursor-not-allowed text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
-            disabled={role === UserRole.USER}
+          <button
+            onClick={() => changeDate(-1)}
+            className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
           >
             <ChevronLeft size={24} />
           </button>
           <div className="flex items-center gap-2">
             <Calendar size={20} className="text-brand-600" />
-            <input 
-              type="date" 
+            <input
+              type="date"
               value={date}
+              max={format(new Date(), 'yyyy-MM-dd')}
               onChange={(e) => setDate(e.target.value)}
-              disabled={role === UserRole.USER}
-              className={`font-bold text-lg text-slate-900 bg-transparent outline-none ${role === UserRole.USER ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
+              className="font-bold text-lg text-slate-900 bg-transparent outline-none cursor-pointer"
             />
           </div>
-          <button 
-            onClick={() => changeDate(1)} 
-            className={`p-2 rounded-lg transition-colors ${role === UserRole.USER ? 'opacity-30 cursor-not-allowed text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
-            disabled={role === UserRole.USER}
+          <button
+            onClick={() => changeDate(1)}
+            className="p-2 rounded-lg hover:bg-slate-100 text-slate-600 transition-colors"
+            disabled={date >= format(new Date(), 'yyyy-MM-dd')}
           >
             <ChevronRight size={24} />
           </button>
         </div>
 
         <div className="flex items-center gap-3 w-full md:w-auto">
-          <button 
-            onClick={() => setShowCopyConfirm(true)}
-            className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-medium hover:bg-indigo-100 transition-colors text-sm"
-          >
-            <Copy size={16} />
-            <span className="hidden sm:inline">Copy Yesterday</span>
-            <span className="sm:hidden">Copy Prev</span>
-          </button>
           <div className="bg-slate-100 px-4 py-2 rounded-lg text-right min-w-[120px]">
             <div className="text-xs text-slate-500 uppercase font-bold">Total</div>
             <div className="font-bold text-brand-600">{totalQty.toFixed(1)} L</div>
@@ -292,34 +239,6 @@ export default function DailyEntry() {
         </div>
       </div>
 
-      {/* Copy Confirmation Modal */}
-      {showCopyConfirm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in fade-in zoom-in duration-200">
-            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4 mx-auto">
-              <Copy size={24} />
-            </div>
-            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Copy Yesterday's Data?</h3>
-            <p className="text-center text-slate-500 text-sm mb-6">
-              This will overwrite today's empty entries with data from yesterday. Existing entries for today will not be changed.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={() => setShowCopyConfirm(false)}
-                className="py-2.5 px-4 bg-white border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={executeCopyYesterday}
-                className="py-2.5 px-4 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700"
-              >
-                Copy Data
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

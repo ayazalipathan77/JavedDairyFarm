@@ -1,24 +1,18 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode } from 'react';
 import { UserRole } from '../types';
 
 interface AuthContextType {
   role: UserRole;
-  setRole: (role: UserRole) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children?: ReactNode }) => {
-  const [role, setRole] = useState<UserRole>(() => {
-    return (localStorage.getItem('userRole') as UserRole) || UserRole.ADMIN;
-  });
-
-  useEffect(() => {
-    localStorage.setItem('userRole', role);
-  }, [role]);
+  // Always ADMIN - single user mode
+  const role = UserRole.ADMIN;
 
   return (
-    <AuthContext.Provider value={{ role, setRole }}>
+    <AuthContext.Provider value={{ role }}>
       {children}
     </AuthContext.Provider>
   );

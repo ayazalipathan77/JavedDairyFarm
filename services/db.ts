@@ -1,4 +1,5 @@
 import { Customer, MilkEntry, LedgerTransaction, AppData } from '../types';
+import { datBackupService } from './datBackup';
 
 const DB_NAME = 'JavedDairyDB';
 const DB_VERSION = 1;
@@ -76,7 +77,8 @@ class DBService {
 
   async saveCustomer(customer: Customer): Promise<void> {
     await this.ensureInit();
-    return this.add('customers', customer);
+    await this.add('customers', customer);
+    await this.syncToDAT();
   }
 
   async getEntries(date?: string): Promise<MilkEntry[]> {
@@ -96,12 +98,14 @@ class DBService {
 
   async saveEntry(entry: MilkEntry): Promise<void> {
     await this.ensureInit();
-    return this.add('entries', entry);
+    await this.add('entries', entry);
+    await this.syncToDAT();
   }
 
   async deleteEntry(id: string): Promise<void> {
     await this.ensureInit();
-    return this.delete('entries', id);
+    await this.delete('entries', id);
+    await this.syncToDAT();
   }
 
   async getTransactions(): Promise<LedgerTransaction[]> {
@@ -111,12 +115,14 @@ class DBService {
 
   async saveTransaction(tx: LedgerTransaction): Promise<void> {
     await this.ensureInit();
-    return this.add('transactions', tx);
+    await this.add('transactions', tx);
+    await this.syncToDAT();
   }
 
   async deleteTransaction(id: string): Promise<void> {
     await this.ensureInit();
-    return this.delete('transactions', id);
+    await this.delete('transactions', id);
+    await this.syncToDAT();
   }
 
   // --- Backup/Restore ---
@@ -135,13 +141,13 @@ class DBService {
     await this.ensureInit();
     try {
       const data = JSON.parse(jsonString);
-      
+
       if (!data || typeof data !== 'object') {
         throw new Error("Invalid data structure");
       }
 
       const tx = this.db!.transaction(['customers', 'entries', 'transactions'], 'readwrite');
-      
+
       // Clear existing data
       tx.objectStore('customers').clear();
       tx.objectStore('entries').clear();
@@ -159,13 +165,37 @@ class DBService {
       }
 
       return new Promise((resolve, reject) => {
-        tx.oncomplete = () => resolve();
+        tx.oncomplete = async () => {
+          // Sync to DAT backup after import
+          await this.syncToDAT();
+          resolve();
+        };
         tx.onerror = () => reject(tx.error);
         tx.onabort = () => reject(new Error("Transaction aborted"));
       });
     } catch (e) {
       console.error("Backup import error:", e);
       throw new Error("Invalid backup file format");
+    }
+  }
+
+  // --- DAT Backup Sync ---
+
+  /**
+   * Sync current database state to DAT backup
+   * Called after every write operation
+   */
+  private async syncToDAT(): Promise<void> {
+    try {
+      const customers = await this.getAll<Customer>('customers');
+      const entries = await this.getAll<MilkEntry>('entries');
+      const transactions = await this.getAll<LedgerTransaction>('transactions');
+
+      const data: AppData = { customers, entries, transactions };
+      await datBackupService.writeBackup(data);
+    } catch (error) {
+      console.error('DAT sync failed:', error);
+      // Don't throw - backup failure shouldn't break main operations
     }
   }
 

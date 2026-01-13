@@ -11,6 +11,7 @@ interface BillData {
   paidAmount: number;
   balance: number;
   entries: MilkEntry[];
+  whatsappSent?: boolean;
 }
 
 export default function Billing() {
@@ -18,9 +19,6 @@ export default function Billing() {
   const [search, setSearch] = useState('');
   const [bills, setBills] = useState<BillData[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  // Modal State
-  const [showSendConfirm, setShowSendConfirm] = useState(false);
 
   useEffect(() => {
     generateBills();
@@ -185,25 +183,20 @@ Customer: ${bill.customer.name}
 --------------------------------
 *❗ Balance Due: $${bill.balance}*
     `.trim();
-    
+
     const url = `https://wa.me/${bill.customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
+
+    // Mark as sent
+    setBills(prevBills =>
+      prevBills.map(b =>
+        b.customer.id === bill.customer.id
+          ? { ...b, whatsappSent: true }
+          : b
+      )
+    );
   };
 
-  const executeSendAll = () => {
-    setShowSendConfirm(false);
-    filteredBills.forEach((bill, index) => {
-      setTimeout(() => {
-        sendWhatsApp(bill);
-      }, index * 1000);
-    });
-  };
-
-  const handleSendAllClick = () => {
-     if (filteredBills.length > 0) {
-        setShowSendConfirm(true);
-     }
-  };
 
   return (
     <div className="space-y-6">
@@ -215,16 +208,6 @@ Customer: ${bill.customer.name}
         </div>
         
         <div className="flex flex-col md:flex-row gap-3 w-full xl:w-auto">
-          {/* Send All Button */}
-          <button 
-            onClick={handleSendAllClick}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 font-medium shadow-sm transition-colors whitespace-nowrap"
-            title="Send WhatsApp message to all visible customers"
-          >
-            <Send size={18} />
-            Send All ({filteredBills.length})
-          </button>
-
           {/* Month Filter */}
           <div className="relative">
             <Calculator className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
@@ -316,21 +299,28 @@ Customer: ${bill.customer.name}
                           )}
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button 
+                          <div className="flex justify-end gap-2 items-center">
+                            <button
                               onClick={() => printBill(bill)}
                               className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors"
                               title="Print Invoice"
                             >
                               <Printer size={18} />
                             </button>
-                            <button 
+                            <button
                               onClick={() => sendWhatsApp(bill)}
-                              className="p-2 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                              title="Send via WhatsApp"
+                              className={`p-2 rounded-lg transition-colors ${
+                                bill.whatsappSent
+                                  ? 'text-green-600 bg-green-50'
+                                  : 'text-green-400 hover:text-green-600 hover:bg-green-50'
+                              }`}
+                              title={bill.whatsappSent ? "Sent ✓" : "Send via WhatsApp"}
                             >
                               <Share2 size={18} />
                             </button>
+                            {bill.whatsappSent && (
+                              <span className="text-xs text-green-600 font-medium">Sent</span>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -343,34 +333,6 @@ Customer: ${bill.customer.name}
         </>
       )}
 
-      {/* Confirmation Modal */}
-      {showSendConfirm && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in fade-in zoom-in duration-200">
-            <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mb-4 mx-auto">
-              <Share2 size={24} />
-            </div>
-            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Send Bulk WhatsApp?</h3>
-            <p className="text-center text-slate-500 text-sm mb-6">
-              You are about to send bills to <span className="font-bold text-slate-900">{filteredBills.length}</span> customers. This will open multiple tabs. Please allow popups.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button 
-                onClick={() => setShowSendConfirm(false)}
-                className="py-2.5 px-4 bg-white border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={executeSendAll}
-                className="py-2.5 px-4 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700"
-              >
-                Send All
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

@@ -1,30 +1,44 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { dbService } from '../services/db';
-import { Download, Upload, Database, CheckCircle, AlertTriangle, Shield, User } from 'lucide-react';
-import { useAuth } from '../contexts/AuthContext';
-import { UserRole } from '../types';
+import { datBackupService } from '../services/datBackup';
+import { Download, Upload, Database, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export default function AppSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
-  const { role, setRole } = useAuth();
-  
+  const [backupInfo, setBackupInfo] = useState<any>(null);
+
   // Modal state
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
+  useEffect(() => {
+    // Load backup info on mount
+    const info = datBackupService.getBackupInfo();
+    setBackupInfo(info);
+  }, []);
+
   const handleExport = async () => {
     try {
-      const data = await dbService.exportData();
-      const blob = new Blob([data], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `javed_dairy_backup_${new Date().toISOString().split('T')[0]}.json`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setMessage({ type: 'success', text: 'Backup downloaded successfully.' });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0] + '_' +
+                       new Date().toISOString().split('T')[1].split('.')[0].replace(/:/g, '-');
+
+      // Export only .dat backup file from the parallel backup
+      const datBlob = await datBackupService.exportToFile();
+      const datUrl = URL.createObjectURL(datBlob);
+      const datLink = document.createElement('a');
+      datLink.href = datUrl;
+      datLink.download = `javed_dairy_backup_${timestamp}.dat`;
+      document.body.appendChild(datLink);
+      datLink.click();
+      document.body.removeChild(datLink);
+      URL.revokeObjectURL(datUrl);
+
+      // Update backup info
+      const info = datBackupService.getBackupInfo();
+      setBackupInfo(info);
+
+      setMessage({ type: 'success', text: 'DAT backup file downloaded successfully.' });
     } catch (e) {
       setMessage({ type: 'error', text: 'Failed to create backup.' });
     }
@@ -52,10 +66,22 @@ export default function AppSettings() {
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
-        const json = event.target?.result as string;
-        await dbService.importData(json);
+        const fileContent = event.target?.result as string;
+
+        // Check if it's a .dat file
+        if (pendingFile.name.endsWith('.dat')) {
+          // Import from DAT backup
+          const appData = await datBackupService.importFromFile(fileContent);
+          // Convert to JSON string for dbService.importData
+          const json = JSON.stringify(appData);
+          await dbService.importData(json);
+        } else {
+          // Import from JSON directly
+          await dbService.importData(fileContent);
+        }
+
         setMessage({ type: 'success', text: 'Restore backup data done. Reloading app...' });
-        
+
         // Reload after a short delay
         setTimeout(() => window.location.reload(), 2000);
       } catch (err) {
@@ -73,7 +99,7 @@ export default function AppSettings() {
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Settings & Data</h2>
-        <p className="text-slate-500">Manage your local data backups and user roles.</p>
+        <p className="text-slate-500">Manage your local data backups and exports.</p>
       </div>
 
       {message && (
@@ -83,48 +109,6 @@ export default function AppSettings() {
         </div>
       )}
 
-      {/* User Role Management */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-100">
-           <div className="flex items-center gap-4 mb-4">
-            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${role === UserRole.ADMIN ? 'bg-purple-50 text-purple-600' : 'bg-gray-50 text-gray-600'}`}>
-              <Shield size={24} />
-            </div>
-            <div>
-              <h3 className="font-bold text-lg text-slate-900">User Role (Active)</h3>
-              <p className="text-sm text-slate-500">Current permission level: <span className="font-semibold text-slate-900">{role}</span></p>
-            </div>
-          </div>
-          
-          <div className="grid grid-cols-2 gap-3">
-             <button 
-               onClick={() => setRole(UserRole.USER)}
-               className={`flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all border ${
-                 role === UserRole.USER 
-                   ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-slate-200' 
-                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-               }`}
-             >
-               <User size={18} />
-               Switch to User
-             </button>
-             <button 
-               onClick={() => setRole(UserRole.ADMIN)}
-               className={`flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all border ${
-                 role === UserRole.ADMIN 
-                   ? 'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-100' 
-                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-               }`}
-             >
-               <Shield size={18} />
-               Switch to Admin
-             </button>
-          </div>
-          <p className="text-xs text-slate-400 mt-3 text-center">
-            Note: In a real app, Admin access would be password protected.
-          </p>
-        </div>
-      </div>
 
       {/* Backup Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
@@ -133,16 +117,41 @@ export default function AppSettings() {
             <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center">
               <Download size={24} />
             </div>
-            <div>
-              <h3 className="font-bold text-lg text-slate-900">Backup Data</h3>
-              <p className="text-sm text-slate-500">Download a full copy of your database to your device.</p>
+            <div className="flex-1">
+              <h3 className="font-bold text-lg text-slate-900">Backup Data (.DAT)</h3>
+              <p className="text-sm text-slate-500">Parallel backup file updated with every change</p>
             </div>
           </div>
-          <button 
+
+          {backupInfo && (
+            <div className="mb-4 p-3 bg-slate-50 rounded-lg">
+              <div className="text-xs text-slate-500 uppercase font-bold mb-2">Last Backup</div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div>
+                  <span className="text-slate-500">Time:</span>{' '}
+                  <span className="font-medium">{new Date(backupInfo.timestamp).toLocaleString()}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Customers:</span>{' '}
+                  <span className="font-medium">{backupInfo.recordCount.customers}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Entries:</span>{' '}
+                  <span className="font-medium">{backupInfo.recordCount.entries}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500">Transactions:</span>{' '}
+                  <span className="font-medium">{backupInfo.recordCount.transactions}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          <button
             onClick={handleExport}
             className="w-full bg-slate-900 text-white font-medium py-3 rounded-xl hover:bg-slate-800 transition-colors"
           >
-            Download Backup File
+            Download .DAT Backup File
           </button>
         </div>
 
@@ -157,11 +166,11 @@ export default function AppSettings() {
             </div>
           </div>
           
-          <input 
-            type="file" 
+          <input
+            type="file"
             ref={fileInputRef}
             onChange={handleFileSelect}
-            accept=".json"
+            accept=".json,.dat"
             className="hidden"
           />
           <button 

@@ -4,7 +4,7 @@ import { Customer, MilkEntry } from '../types';
 import { BarChart3, Download, MessageCircle, Filter } from 'lucide-react';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isWithinInterval } from 'date-fns';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export default function CustomerReports() {
     const [customers, setCustomers] = useState<Customer[]>([]);
@@ -71,7 +71,10 @@ export default function CustomerReports() {
     };
 
     const handleDownloadPDF = () => {
-        if (!selectedCustomer || !selectedCustomerData) return;
+        if (!selectedCustomer) return;
+
+        const selectedCustomerData = customers.find(c => c.id === selectedCustomer);
+        if (!selectedCustomerData) return;
 
         const doc = new jsPDF();
         const monthlyData = getMonthlyData();
@@ -103,8 +106,7 @@ export default function CustomerReports() {
             item.amount > 0 ? `$${item.amount.toFixed(2)}` : '-'
         ]);
 
-        // @ts-ignore
-        doc.autoTable({
+        autoTable(doc, {
             head: [['Date', 'Quantity (L)', 'Rate ($/L)', 'Amount ($)']],
             body: tableData,
             startY: 120,
@@ -124,25 +126,51 @@ export default function CustomerReports() {
     };
 
     const handleSendWhatsApp = () => {
-        if (!selectedCustomer || !selectedCustomerData?.whatsappNumber) return;
+        if (!selectedCustomer) return;
+
+        const selectedCustomerData = customers.find(c => c.id === selectedCustomer);
+        if (!selectedCustomerData?.whatsappNumber) {
+            alert('This customer does not have a WhatsApp number configured. Please add one in Customer Management.');
+            return;
+        }
 
         const totals = getTotals();
         const monthName = format(new Date(selectedMonth + '-01'), 'MMMM yyyy');
+        const monthlyData = getMonthlyData();
+
+        // Create formatted table for days with milk
+        const dataLines = monthlyData
+            .filter(item => item.quantity > 0)
+            .map(item => {
+                const dateStr = format(new Date(item.date), 'dd MMM');
+                const qty = item.quantity.toFixed(1).padStart(6);
+                const rate = item.rate.toFixed(2).padStart(6);
+                const amt = item.amount.toFixed(2).padStart(8);
+                return `${dateStr} │ ${qty}L │ $${rate} │ $${amt}`;
+            })
+            .join('\n');
 
         const message = `*Javed Dairy Farm - Monthly Report*
-  
-  Customer: ${selectedCustomerData.name}
-  Period: ${monthName}
-  
-  📊 *Summary:*
-  • Total Milk: ${totals.totalQuantity.toFixed(1)} L
-  • Total Amount: $${totals.totalAmount.toLocaleString()}
-  • Active Days: ${totals.daysWithMilk}
-  
-  📄 Detailed PDF report has been generated.
-  
-  Thank you for your business!
-  Javed Dairy Farm`;
+
+📋 Customer: ${selectedCustomerData.name}
+📅 Period: ${monthName}
+
+📊 *Summary:*
+• Total Milk: ${totals.totalQuantity.toFixed(1)} L
+• Total Amount: $${totals.totalAmount.toLocaleString()}
+• Active Days: ${totals.daysWithMilk}
+
+📑 *Daily Breakdown:*
+${'```'}
+Date    │ Qty(L) │  Rate  │  Amount
+────────┼────────┼────────┼─────────
+${dataLines}
+────────┼────────┼────────┼─────────
+Total   │ ${totals.totalQuantity.toFixed(1).padStart(6)}L │        │ $${totals.totalAmount.toFixed(2).padStart(7)}
+${'```'}
+
+Thank you for your business! 🥛
+_Javed Dairy Farm_`;
 
         // Encode message for URL
         const encodedMessage = encodeURIComponent(message);
@@ -150,9 +178,6 @@ export default function CustomerReports() {
 
         // Open WhatsApp
         window.open(whatsappUrl, '_blank');
-
-        // Note: PDF attachment would require WhatsApp Business API with a backend service
-        alert('WhatsApp opened with summary message. PDF attachment requires backend integration with WhatsApp Business API.');
     };
 
     if (loading) {
