@@ -1,0 +1,5 @@
+{
+  "name": "Javed Dairy Farm",
+  "description": "Offline-first daily milk business management system. Tracks customers, daily milk entries, expenses, and generates monthly bills.",
+  "requestFramePermissions": []
+}
