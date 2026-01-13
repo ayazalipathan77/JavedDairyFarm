@@ -2,6 +2,7 @@ export interface Customer {
   id: string;
   name: string;
   phone: string;
+  whatsappNumber?: string; // Optional WhatsApp number for sending reports
   address: string;
   rate: number; // Default rate per liter/kg
   defaultQuantity?: number; // Default daily quantity to pre-fill

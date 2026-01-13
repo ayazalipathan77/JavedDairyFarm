@@ -12,6 +12,7 @@ export default function Customers() {
   const [formData, setFormData] = useState<Partial<Customer>>({
     name: '',
     phone: '',
+    whatsappNumber: '',
     address: '',
     rate: 100,
     defaultQuantity: 0,
@@ -37,6 +38,7 @@ export default function Customers() {
       id: editingId || crypto.randomUUID(),
       name: formData.name,
       phone: formData.phone || '',
+      whatsappNumber: formData.whatsappNumber || '',
       address: formData.address || '',
       rate: Number(formData.rate) || 0,
       defaultQuantity: Number(formData.defaultQuantity) || 0,
@@ -47,7 +49,7 @@ export default function Customers() {
     await dbService.saveCustomer(customer);
     setIsModalOpen(false);
     setEditingId(null);
-    setFormData({ name: '', phone: '', address: '', rate: 100, defaultQuantity: 0, isActive: true });
+    setFormData({ name: '', phone: '', whatsappNumber: '', address: '', rate: 100, defaultQuantity: 0, isActive: true });
     loadCustomers();
   };
 
@@ -57,8 +59,8 @@ export default function Customers() {
     setIsModalOpen(true);
   };
 
-  const filtered = customers.filter(c => 
-    c.name.toLowerCase().includes(search.toLowerCase()) || 
+  const filtered = customers.filter(c =>
+    c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.phone.includes(search)
   );
 
@@ -66,10 +68,10 @@ export default function Customers() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-bold text-slate-900">Customers</h2>
-        <button 
+        <button
           onClick={() => {
             setEditingId(null);
-            setFormData({ name: '', phone: '', address: '', rate: 100, defaultQuantity: 0, isActive: true });
+            setFormData({ name: '', phone: '', whatsappNumber: '', address: '', rate: 100, defaultQuantity: 0, isActive: true });
             setIsModalOpen(true);
           }}
           className="bg-brand-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-brand-700 transition-colors shadow-sm"
@@ -82,9 +84,9 @@ export default function Customers() {
       {/* Search */}
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
-        <input 
-          type="text" 
-          placeholder="Search by name or phone..." 
+        <input
+          type="text"
+          placeholder="Search by name or phone..."
           className="w-full pl-10 pr-4 py-3 bg-white rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -114,11 +116,11 @@ export default function Customers() {
                 </button>
               )}
             </div>
-            
+
             <div className="space-y-2 text-sm text-slate-600">
               <div className="flex items-center gap-2">
                 <Phone size={16} className="text-slate-400" />
-                <a href={`https://wa.me/${customer.phone.replace(/\D/g,'')}`} target="_blank" rel="noreferrer" className="hover:text-green-600 hover:underline">
+                <a href={`https://wa.me/${customer.phone.replace(/\D/g, '')}`} target="_blank" rel="noreferrer" className="hover:text-green-600 hover:underline">
                   {customer.phone || 'No Phone'}
                 </a>
               </div>
@@ -149,46 +151,57 @@ export default function Customers() {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Full Name</label>
-                <input 
+                <input
                   required
-                  type="text" 
+                  type="text"
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                   value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone (WhatsApp)</label>
-                  <input 
-                    type="tel" 
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Phone</label>
+                  <input
+                    type="tel"
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                     value={formData.phone}
-                    onChange={e => setFormData({...formData, phone: e.target.value})}
+                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Rate / Unit</label>
-                  <input 
-                    type="number" 
+                  <label className="block text-sm font-medium text-slate-700 mb-1">WhatsApp Number</label>
+                  <input
+                    type="tel"
                     className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
-                    value={formData.rate}
-                    onChange={e => setFormData({...formData, rate: parseFloat(e.target.value)})}
+                    value={formData.whatsappNumber}
+                    onChange={e => setFormData({ ...formData, whatsappNumber: e.target.value })}
+                    placeholder="For sending reports"
                   />
                 </div>
               </div>
-              
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Rate / Unit</label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  value={formData.rate}
+                  onChange={e => setFormData({ ...formData, rate: parseFloat(e.target.value) })}
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Default Quantity (L)</label>
                 <div className="relative">
                   <Droplet className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                  <input 
-                    type="number" 
+                  <input
+                    type="number"
                     step="0.5"
                     className="w-full pl-10 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                     value={formData.defaultQuantity}
-                    onChange={e => setFormData({...formData, defaultQuantity: parseFloat(e.target.value)})}
+                    onChange={e => setFormData({ ...formData, defaultQuantity: parseFloat(e.target.value) })}
                     placeholder="0"
                   />
                 </div>
@@ -197,35 +210,35 @@ export default function Customers() {
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
-                <textarea 
+                <textarea
                   className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                   rows={2}
                   value={formData.address}
-                  onChange={e => setFormData({...formData, address: e.target.value})}
+                  onChange={e => setFormData({ ...formData, address: e.target.value })}
                 />
               </div>
 
               <div className="flex items-center gap-2">
-                <input 
-                  type="checkbox" 
+                <input
+                  type="checkbox"
                   id="isActive"
                   checked={formData.isActive}
-                  onChange={e => setFormData({...formData, isActive: e.target.checked})}
+                  onChange={e => setFormData({ ...formData, isActive: e.target.checked })}
                   className="w-4 h-4 text-brand-600 rounded focus:ring-brand-500"
                 />
                 <label htmlFor="isActive" className="text-sm font-medium text-slate-700">Active Customer</label>
               </div>
 
               <div className="flex justify-end gap-3 mt-6">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => setIsModalOpen(false)}
                   className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg font-medium"
                 >
                   Cancel
                 </button>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   className="px-4 py-2 bg-brand-600 text-white rounded-lg hover:bg-brand-700 font-medium"
                 >
                   Save Customer

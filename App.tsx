@@ -1,16 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Milk, 
-  BookOpen, 
-  FileText, 
-  Settings, 
-  Menu, 
+import {
+  LayoutDashboard,
+  Users,
+  Milk,
+  BookOpen,
+  FileText,
+  Settings,
+  Menu,
   X,
   Shield,
-  ShieldCheck
+  ShieldCheck,
+  BarChart3
 } from 'lucide-react';
 import { dbService } from './services/db';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -23,20 +24,20 @@ import DailyEntry from './components/DailyEntry';
 import Ledger from './components/Ledger';
 import Billing from './components/Billing';
 import AppSettings from './components/Settings';
+import CustomerReports from './components/CustomerReports';
 
 const NavItem = ({ to, icon: Icon, label, onClick }: { to: string, icon: any, label: string, onClick?: () => void }) => {
   const location = useLocation();
   const isActive = location.pathname === to;
-  
+
   return (
-    <Link 
-      to={to} 
+    <Link
+      to={to}
       onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-        isActive 
-          ? 'bg-brand-500 text-white shadow-md shadow-brand-500/30' 
-          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-      }`}
+      className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${isActive
+        ? 'bg-brand-500 text-white shadow-md shadow-brand-500/30'
+        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+        }`}
     >
       <Icon size={20} className={isActive ? 'text-white' : 'text-slate-500'} />
       <span className="font-medium">{label}</span>
@@ -60,17 +61,17 @@ const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => (
 
 const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
   const { role } = useAuth();
-  
+
   return (
     <>
       {/* Overlay */}
       {isOpen && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 z-30 md:hidden"
           onClick={onClose}
         />
       )}
-      
+
       {/* Sidebar Content */}
       <aside className={`
         fixed inset-y-0 left-0 z-40 w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 ease-in-out
@@ -102,6 +103,7 @@ const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
             <NavItem to="/" icon={LayoutDashboard} label="Dashboard" onClick={onClose} />
             <NavItem to="/daily-entry" icon={Milk} label="Daily Entry" onClick={onClose} />
             <NavItem to="/customers" icon={Users} label="Customers" onClick={onClose} />
+            <NavItem to="/reports" icon={BarChart3} label="Customer Reports" onClick={onClose} />
             <NavItem to="/ledger" icon={BookOpen} label="Cash & Ledger" onClick={onClose} />
             <NavItem to="/billing" icon={FileText} label="Monthly Billing" onClick={onClose} />
             <div className="pt-4 mt-4 border-t border-gray-100">
@@ -110,10 +112,10 @@ const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
           </nav>
 
           <div className="p-4 border-t border-gray-100">
-             <div className="flex items-center gap-2 text-xs text-slate-400 justify-center">
-               {role === UserRole.ADMIN ? <ShieldCheck size={14} /> : <Shield size={14} />}
-               <span>Logged in as {role}</span>
-             </div>
+            <div className="flex items-center gap-2 text-xs text-slate-400 justify-center">
+              {role === UserRole.ADMIN ? <ShieldCheck size={14} /> : <Shield size={14} />}
+              <span>Logged in as {role}</span>
+            </div>
           </div>
         </div>
       </aside>
@@ -141,13 +143,14 @@ const AppContent = () => {
     <div className="flex flex-col md:flex-row min-h-screen bg-gray-50">
       <MobileHeader onMenuClick={() => setIsSidebarOpen(true)} />
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      
+
       <main className="flex-1 overflow-x-hidden overflow-y-auto h-[calc(100vh-64px)] md:h-screen p-4 md:p-8">
         <div className="max-w-7xl mx-auto h-full">
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/customers" element={<Customers />} />
             <Route path="/daily-entry" element={<DailyEntry />} />
+            <Route path="/reports" element={<CustomerReports />} />
             <Route path="/ledger" element={<Ledger />} />
             <Route path="/billing" element={<Billing />} />
             <Route path="/settings" element={<AppSettings />} />
