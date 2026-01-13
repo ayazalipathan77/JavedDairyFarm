@@ -8,6 +8,10 @@ export default function AppSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
   const { role, setRole } = useAuth();
+  
+  // Modal state
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   const handleExport = async () => {
     try {
@@ -26,27 +30,43 @@ export default function AppSettings() {
     }
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!window.confirm("WARNING: This will overwrite all current data with the backup file. Are you sure?")) {
-        if (fileInputRef.current) fileInputRef.current.value = '';
-        return;
+    // Clear input so same file can be selected again
+    if (fileInputRef.current) {
+        fileInputRef.current.value = '';
     }
+
+    setPendingFile(file);
+    setIsConfirmOpen(true);
+  };
+
+  const executeRestore = async () => {
+    if (!pendingFile) return;
+    setIsConfirmOpen(false);
+
+    setMessage({ type: 'success', text: 'Restoring data...' });
 
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
         const json = event.target?.result as string;
         await dbService.importData(json);
-        setMessage({ type: 'success', text: 'Data restored successfully. Please refresh the page.' });
-        setTimeout(() => window.location.reload(), 1500);
+        setMessage({ type: 'success', text: 'Restore backup data done. Reloading app...' });
+        
+        // Reload after a short delay
+        setTimeout(() => window.location.reload(), 2000);
       } catch (err) {
+        console.error(err);
         setMessage({ type: 'error', text: 'Invalid backup file or corrupt data.' });
       }
     };
-    reader.readAsText(file);
+    reader.onerror = () => {
+      setMessage({ type: 'error', text: 'Error reading the file.' });
+    };
+    reader.readAsText(pendingFile);
   };
 
   return (
@@ -140,7 +160,7 @@ export default function AppSettings() {
           <input 
             type="file" 
             ref={fileInputRef}
-            onChange={handleImport}
+            onChange={handleFileSelect}
             accept=".json"
             className="hidden"
           />
@@ -169,6 +189,35 @@ export default function AppSettings() {
           </div>
         </div>
       </div>
+
+      {/* Custom Confirmation Modal */}
+      {isConfirmOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4 mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Confirm Restore</h3>
+            <p className="text-center text-slate-500 text-sm mb-6">
+              This will <span className="font-bold text-red-600">permanently overwrite</span> all current data with the selected backup file. This action cannot be undone.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => { setIsConfirmOpen(false); setPendingFile(null); }}
+                className="py-2.5 px-4 bg-white border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={executeRestore}
+                className="py-2.5 px-4 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700"
+              >
+                Restore Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

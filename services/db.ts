@@ -134,25 +134,37 @@ class DBService {
   async importData(jsonString: string): Promise<void> {
     await this.ensureInit();
     try {
-      const data: AppData = JSON.parse(jsonString);
+      const data = JSON.parse(jsonString);
       
+      if (!data || typeof data !== 'object') {
+        throw new Error("Invalid data structure");
+      }
+
       const tx = this.db!.transaction(['customers', 'entries', 'transactions'], 'readwrite');
       
-      // Clear existing
+      // Clear existing data
       tx.objectStore('customers').clear();
       tx.objectStore('entries').clear();
       tx.objectStore('transactions').clear();
 
-      // Add new
-      data.customers.forEach(c => tx.objectStore('customers').put(c));
-      data.entries.forEach(e => tx.objectStore('entries').put(e));
-      data.transactions.forEach(t => tx.objectStore('transactions').put(t));
+      // Add new data (with safety checks for arrays)
+      if (Array.isArray(data.customers)) {
+        data.customers.forEach((c: any) => tx.objectStore('customers').put(c));
+      }
+      if (Array.isArray(data.entries)) {
+        data.entries.forEach((e: any) => tx.objectStore('entries').put(e));
+      }
+      if (Array.isArray(data.transactions)) {
+        data.transactions.forEach((t: any) => tx.objectStore('transactions').put(t));
+      }
 
       return new Promise((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(new Error("Transaction aborted"));
       });
     } catch (e) {
+      console.error("Backup import error:", e);
       throw new Error("Invalid backup file format");
     }
   }

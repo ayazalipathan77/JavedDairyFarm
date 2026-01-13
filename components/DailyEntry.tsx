@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { dbService } from '../services/db';
 import { Customer, MilkEntry, UserRole } from '../types';
-import { Calendar, Save, RotateCcw, Copy, Check, ChevronLeft, ChevronRight, SaveAll } from 'lucide-react';
+import { Calendar, Save, RotateCcw, Copy, Check, ChevronLeft, ChevronRight, SaveAll, AlertTriangle } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -13,6 +13,9 @@ export default function DailyEntry() {
   const [loading, setLoading] = useState(true);
   const [isSavingAll, setIsSavingAll] = useState(false);
   const { role } = useAuth();
+  
+  // Modal State
+  const [showCopyConfirm, setShowCopyConfirm] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -99,8 +102,8 @@ export default function DailyEntry() {
     }
   };
 
-  const copyYesterday = async () => {
-    if (!window.confirm("Overwrite today's empty entries with yesterday's data?")) return;
+  const executeCopyYesterday = async () => {
+    setShowCopyConfirm(false);
     
     const yesterday = format(addDays(new Date(date), -1), 'yyyy-MM-dd');
     const yesterdayEntries = await dbService.getEntries(yesterday);
@@ -185,7 +188,7 @@ export default function DailyEntry() {
 
         <div className="flex items-center gap-3 w-full md:w-auto">
           <button 
-            onClick={copyYesterday}
+            onClick={() => setShowCopyConfirm(true)}
             className="flex-1 md:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-indigo-50 text-indigo-700 rounded-lg font-medium hover:bg-indigo-100 transition-colors text-sm"
           >
             <Copy size={16} />
@@ -288,6 +291,35 @@ export default function DailyEntry() {
            <p className="font-bold text-lg text-brand-600 text-right">{totalQty.toFixed(1)} L</p>
         </div>
       </div>
+
+      {/* Copy Confirmation Modal */}
+      {showCopyConfirm && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mb-4 mx-auto">
+              <Copy size={24} />
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Copy Yesterday's Data?</h3>
+            <p className="text-center text-slate-500 text-sm mb-6">
+              This will overwrite today's empty entries with data from yesterday. Existing entries for today will not be changed.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setShowCopyConfirm(false)}
+                className="py-2.5 px-4 bg-white border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={executeCopyYesterday}
+                className="py-2.5 px-4 bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700"
+              >
+                Copy Data
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

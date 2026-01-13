@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/db';
 import { LedgerTransaction, TransactionType, LedgerCategory, Customer, UserRole } from '../types';
 import { format } from 'date-fns';
-import { TrendingDown, TrendingUp, Plus, Trash2 } from 'lucide-react';
+import { TrendingDown, TrendingUp, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Ledger() {
@@ -18,6 +18,9 @@ export default function Ledger() {
   const [description, setDescription] = useState('');
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [selectedCustomer, setSelectedCustomer] = useState('');
+
+  // Delete Modal State
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -54,9 +57,10 @@ export default function Ledger() {
     loadData();
   };
 
-  const handleDelete = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this transaction?')) {
-      await dbService.deleteTransaction(id);
+  const confirmDelete = async () => {
+    if (deleteId) {
+      await dbService.deleteTransaction(deleteId);
+      setDeleteId(null);
       loadData();
     }
   };
@@ -182,7 +186,7 @@ export default function Ledger() {
                   {role === UserRole.ADMIN && (
                     <td className="px-6 py-4 text-right">
                       <button 
-                        onClick={() => handleDelete(tx.id)}
+                        onClick={() => setDeleteId(tx.id)}
                         className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                         title="Delete Transaction"
                       >
@@ -201,6 +205,35 @@ export default function Ledger() {
           </table>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {deleteId && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-xl animate-in fade-in zoom-in duration-200">
+            <div className="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mb-4 mx-auto">
+              <AlertTriangle size={24} />
+            </div>
+            <h3 className="text-lg font-bold text-center text-slate-900 mb-2">Delete Transaction?</h3>
+            <p className="text-center text-slate-500 text-sm mb-6">
+              This action cannot be undone. Are you sure you want to delete this transaction record?
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <button 
+                onClick={() => setDeleteId(null)}
+                className="py-2.5 px-4 bg-white border border-slate-300 text-slate-700 rounded-xl font-medium hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={confirmDelete}
+                className="py-2.5 px-4 bg-red-600 text-white rounded-xl font-medium hover:bg-red-700"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
