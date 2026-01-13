@@ -8,9 +8,13 @@ import {
   FileText, 
   Settings, 
   Menu, 
-  X
+  X,
+  Shield,
+  ShieldCheck
 } from 'lucide-react';
 import { dbService } from './services/db';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UserRole } from './types';
 
 // Components
 import Dashboard from './components/Dashboard';
@@ -55,6 +59,8 @@ const MobileHeader = ({ onMenuClick }: { onMenuClick: () => void }) => (
 );
 
 const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) => {
+  const { role } = useAuth();
+  
   return (
     <>
       {/* Overlay */}
@@ -79,7 +85,12 @@ const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
               </div>
               <div>
                 <h1 className="font-bold text-xl text-slate-900 leading-tight">Javed Dairy</h1>
-                <p className="text-xs text-slate-500">System v1.0</p>
+                <div className="flex items-center gap-1">
+                  <span className="text-xs text-slate-500">System v1.0</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide ${role === UserRole.ADMIN ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'}`}>
+                    {role === UserRole.ADMIN ? 'Admin' : 'User'}
+                  </span>
+                </div>
               </div>
             </div>
             <button onClick={onClose} className="md:hidden p-2 text-slate-400 hover:text-slate-600">
@@ -97,6 +108,13 @@ const Sidebar = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) 
               <NavItem to="/settings" icon={Settings} label="Settings & Backup" onClick={onClose} />
             </div>
           </nav>
+
+          <div className="p-4 border-t border-gray-100">
+             <div className="flex items-center gap-2 text-xs text-slate-400 justify-center">
+               {role === UserRole.ADMIN ? <ShieldCheck size={14} /> : <Shield size={14} />}
+               <span>Logged in as {role}</span>
+             </div>
+          </div>
         </div>
       </aside>
     </>
@@ -142,8 +160,10 @@ const AppContent = () => {
 
 export default function App() {
   return (
-    <HashRouter>
-      <AppContent />
-    </HashRouter>
+    <AuthProvider>
+      <HashRouter>
+        <AppContent />
+      </HashRouter>
+    </AuthProvider>
   );
 }

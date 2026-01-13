@@ -3,7 +3,7 @@ import { dbService } from '../services/db';
 import { MilkEntry, LedgerTransaction, Customer, TransactionType } from '../types';
 import { Users, Droplets, CreditCard, TrendingUp, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, LineChart, Line, CartesianGrid } from 'recharts';
-import { format, subDays, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, addDays, endOfMonth, isWithinInterval } from 'date-fns';
 
 const StatCard = ({ title, value, subtitle, icon: Icon, color }: any) => (
   <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-start justify-between">
@@ -42,7 +42,9 @@ export default function Dashboard() {
     try {
       setLoading(true);
       const today = format(new Date(), 'yyyy-MM-dd');
-      const startMonth = startOfMonth(new Date());
+      
+      const now = new Date();
+      const startMonth = new Date(now.getFullYear(), now.getMonth(), 1);
       const endMonth = endOfMonth(new Date());
 
       const [customers, entries, transactions] = await Promise.all([
@@ -81,7 +83,7 @@ export default function Dashboard() {
 
       // Prepare Chart Data (Last 7 Days)
       const last7Days = Array.from({ length: 7 }, (_, i) => {
-        const d = subDays(new Date(), 6 - i);
+        const d = addDays(new Date(), -(6 - i));
         const dateStr = format(d, 'yyyy-MM-dd');
         const dayEntries = entries.filter(e => e.date === dateStr);
         return {

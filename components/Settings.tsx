@@ -1,10 +1,13 @@
 import React, { useRef, useState } from 'react';
 import { dbService } from '../services/db';
-import { Download, Upload, Database, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Download, Upload, Database, CheckCircle, AlertTriangle, Shield, User } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { UserRole } from '../types';
 
 export default function AppSettings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [message, setMessage] = useState<{type: 'success' | 'error', text: string} | null>(null);
+  const { role, setRole } = useAuth();
 
   const handleExport = async () => {
     try {
@@ -50,7 +53,7 @@ export default function AppSettings() {
     <div className="space-y-6 max-w-2xl mx-auto">
       <div>
         <h2 className="text-2xl font-bold text-slate-900">Settings & Data</h2>
-        <p className="text-slate-500">Manage your local data backups.</p>
+        <p className="text-slate-500">Manage your local data backups and user roles.</p>
       </div>
 
       {message && (
@@ -60,6 +63,50 @@ export default function AppSettings() {
         </div>
       )}
 
+      {/* User Role Management */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+        <div className="p-6 border-b border-slate-100">
+           <div className="flex items-center gap-4 mb-4">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center ${role === UserRole.ADMIN ? 'bg-purple-50 text-purple-600' : 'bg-gray-50 text-gray-600'}`}>
+              <Shield size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-lg text-slate-900">User Role (Active)</h3>
+              <p className="text-sm text-slate-500">Current permission level: <span className="font-semibold text-slate-900">{role}</span></p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-3">
+             <button 
+               onClick={() => setRole(UserRole.USER)}
+               className={`flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all border ${
+                 role === UserRole.USER 
+                   ? 'bg-slate-900 text-white border-slate-900 ring-2 ring-slate-200' 
+                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+               }`}
+             >
+               <User size={18} />
+               Switch to User
+             </button>
+             <button 
+               onClick={() => setRole(UserRole.ADMIN)}
+               className={`flex items-center justify-center gap-2 py-3 rounded-xl font-medium transition-all border ${
+                 role === UserRole.ADMIN 
+                   ? 'bg-purple-600 text-white border-purple-600 ring-2 ring-purple-100' 
+                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+               }`}
+             >
+               <Shield size={18} />
+               Switch to Admin
+             </button>
+          </div>
+          <p className="text-xs text-slate-400 mt-3 text-center">
+            Note: In a real app, Admin access would be password protected.
+          </p>
+        </div>
+      </div>
+
+      {/* Backup Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="p-6 border-b border-slate-100">
           <div className="flex items-center gap-4 mb-4">

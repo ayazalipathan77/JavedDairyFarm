@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { dbService } from '../services/db';
-import { Customer, MilkEntry } from '../types';
-import { Calendar, Save, RotateCcw, Copy, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, subDays, addDays } from 'date-fns';
+import { Customer, MilkEntry, UserRole } from '../types';
+import { Calendar, Save, RotateCcw, Copy, Check, ChevronLeft, ChevronRight, SaveAll } from 'lucide-react';
+import { format, addDays } from 'date-fns';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function DailyEntry() {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
@@ -10,6 +11,8 @@ export default function DailyEntry() {
   const [entries, setEntries] = useState<Record<string, number>>({}); // Map customerId -> qty
   const [savedStatus, setSavedStatus] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [isSavingAll, setIsSavingAll] = useState(false);
+  const { role } = useAuth();
 
   useEffect(() => {
     loadData();
@@ -29,9 +32,16 @@ export default function DailyEntry() {
       const entryMap: Record<string, number> = {};
       const statusMap: Record<string, boolean> = {};
       
+      // 1. First pass: Pre-fill from Customer Defaults
+      activeCustomers.forEach(c => {
+         entryMap[c.id] = c.defaultQuantity || 0;
+         statusMap[c.id] = false; // Default values are considered unsaved
+      });
+
+      // 2. Second pass: Overwrite with actual DB entries for the day
       dayEntries.forEach(e => {
         entryMap[e.customerId] = e.quantity;
-        statusMap[e.customerId] = true;
+        statusMap[e.customerId] = true; // DB values are saved
       });
 
       setEntries(entryMap);
@@ -47,13 +57,16 @@ export default function DailyEntry() {
     setSavedStatus(prev => ({ ...prev, [customerId]: false }));
   };
 
-  const saveEntry = async (customer: Customer) => {
-    const qty = entries[customer.id] || 0;
+  const saveEntry = async (customer: Customer, manualQty?: number) => {
+    const qty = manualQty !== undefined ? manualQty : (entries[customer.id] || 0);
     
-    // Only save if quantity > 0 or if we need to update an existing entry to 0
-    // Simple logic: Always overwrite for the day
+    // Logic: 
+    // If quantity > 0, we save it.
+    // If quantity is 0, BUT customer has a defaultQuantity > 0, we MUST save the 0 to override the default on reload.
+    // If quantity is 0 and no default, we can delete the entry to clean up.
+    
     const entry: MilkEntry = {
-      id: `${date}-${customer.id}`, // Deterministic ID for easy overwrite
+      id: `${date}-${customer.id}`,
       customerId: customer.id,
       date: date,
       quantity: qty,
@@ -62,12 +75,9 @@ export default function DailyEntry() {
       timestamp: Date.now()
     };
 
-    if (qty > 0) {
+    if (qty > 0 || (customer.defaultQuantity && customer.defaultQuantity > 0)) {
       await dbService.saveEntry(entry);
     } else {
-      // If 0, check if we need to delete existing or just ignore
-      // For simplicity in this app, we save 0 entries to explicitely show "no milk" or we delete. 
-      // Let's delete if 0 to keep DB clean
       await dbService.deleteEntry(entry.id);
     }
     
@@ -75,14 +85,24 @@ export default function DailyEntry() {
   };
 
   const handleBlur = (customer: Customer) => {
-    // Auto-save on blur
     saveEntry(customer);
+  };
+
+  const handleSaveAll = async () => {
+    setIsSavingAll(true);
+    try {
+      // Save all current entries visible on screen
+      const promises = customers.map(c => saveEntry(c));
+      await Promise.all(promises);
+    } finally {
+      setIsSavingAll(false);
+    }
   };
 
   const copyYesterday = async () => {
     if (!window.confirm("Overwrite today's empty entries with yesterday's data?")) return;
     
-    const yesterday = format(subDays(new Date(date), 1), 'yyyy-MM-dd');
+    const yesterday = format(addDays(new Date(date), -1), 'yyyy-MM-dd');
     const yesterdayEntries = await dbService.getEntries(yesterday);
     
     const newEntries = { ...entries };
@@ -90,26 +110,25 @@ export default function DailyEntry() {
     const updates: Promise<void>[] = [];
 
     yesterdayEntries.forEach(e => {
-      // Only copy if today is empty for this customer
-      if (newEntries[e.customerId] === undefined || newEntries[e.customerId] === 0) {
+      // Only copy if currently 0 or default (unsaved)
+      if (!newStatus[e.customerId] || newEntries[e.customerId] === 0) {
         newEntries[e.customerId] = e.quantity;
-        newStatus[e.customerId] = true; // Mark as saved visually
+        // We will mark it as unsaved so user has to confirm/save, OR we save immediately.
+        // Let's save immediately to match 'Copy' behavior expectation
         
-        const entry: MilkEntry = {
-          id: `${date}-${e.customerId}`,
-          customerId: e.customerId,
-          date: date,
-          quantity: e.quantity,
-          rate: e.rate, // Use current rate or yesterday's? Usually current customer rate.
-          amount: e.quantity * e.rate,
-          timestamp: Date.now()
-        };
-        // We should fetch the customer to get current rate, but for speed using yesterday's rate or looking up customer
         const customer = customers.find(c => c.id === e.customerId);
         if (customer) {
-            entry.rate = customer.rate;
-            entry.amount = entry.quantity * customer.rate;
+            const entry: MilkEntry = {
+              id: `${date}-${e.customerId}`,
+              customerId: e.customerId,
+              date: date,
+              quantity: e.quantity,
+              rate: customer.rate,
+              amount: e.quantity * customer.rate,
+              timestamp: Date.now()
+            };
             updates.push(dbService.saveEntry(entry));
+            newStatus[e.customerId] = true;
         }
       }
     });
@@ -131,13 +150,19 @@ export default function DailyEntry() {
     return sum + (qty * c.rate);
   }, 0);
 
+  const unsavedCount = Object.values(savedStatus).filter(s => !s).length;
+
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
+    <div className="space-y-6 max-w-4xl mx-auto pb-20 md:pb-0">
       {/* Date Navigator */}
       <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col md:flex-row items-center justify-between gap-4 sticky top-0 z-10">
         <div className="flex items-center gap-4 w-full md:w-auto justify-between">
-          <button onClick={() => changeDate(-1)} className="p-2 hover:bg-slate-100 rounded-lg">
-            <ChevronLeft size={24} className="text-slate-600" />
+          <button 
+            onClick={() => changeDate(-1)} 
+            className={`p-2 rounded-lg transition-colors ${role === UserRole.USER ? 'opacity-30 cursor-not-allowed text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
+            disabled={role === UserRole.USER}
+          >
+            <ChevronLeft size={24} />
           </button>
           <div className="flex items-center gap-2">
             <Calendar size={20} className="text-brand-600" />
@@ -145,11 +170,16 @@ export default function DailyEntry() {
               type="date" 
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="font-bold text-lg text-slate-900 bg-transparent outline-none cursor-pointer"
+              disabled={role === UserRole.USER}
+              className={`font-bold text-lg text-slate-900 bg-transparent outline-none ${role === UserRole.USER ? 'cursor-not-allowed opacity-70' : 'cursor-pointer'}`}
             />
           </div>
-          <button onClick={() => changeDate(1)} className="p-2 hover:bg-slate-100 rounded-lg">
-            <ChevronRight size={24} className="text-slate-600" />
+          <button 
+            onClick={() => changeDate(1)} 
+            className={`p-2 rounded-lg transition-colors ${role === UserRole.USER ? 'opacity-30 cursor-not-allowed text-slate-300' : 'hover:bg-slate-100 text-slate-600'}`}
+            disabled={role === UserRole.USER}
+          >
+            <ChevronRight size={24} />
           </button>
         </div>
 
@@ -172,53 +202,77 @@ export default function DailyEntry() {
       {loading ? (
         <div className="text-center py-12 text-slate-400">Loading daily entries...</div>
       ) : (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="grid grid-cols-12 bg-slate-50 p-4 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
-            <div className="col-span-5 md:col-span-4">Customer</div>
-            <div className="col-span-3 md:col-span-2 text-right">Rate</div>
-            <div className="col-span-4 md:col-span-3 text-center">Quantity (L)</div>
-            <div className="hidden md:block col-span-2 text-right">Amount</div>
-            <div className="hidden md:block col-span-1 text-center">Status</div>
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            <div className="grid grid-cols-12 bg-slate-50 p-4 border-b border-slate-200 text-xs font-semibold text-slate-500 uppercase tracking-wider">
+              <div className="col-span-5 md:col-span-4">Customer</div>
+              <div className="col-span-3 md:col-span-2 text-right">Rate</div>
+              <div className="col-span-4 md:col-span-3 text-center">Quantity (L)</div>
+              <div className="hidden md:block col-span-2 text-right">Amount</div>
+              <div className="hidden md:block col-span-1 text-center">Status</div>
+            </div>
+
+            <div className="divide-y divide-slate-100">
+              {customers.map(customer => {
+                const qty = entries[customer.id] || '';
+                const amount = (Number(qty) * customer.rate).toFixed(0);
+                const isSaved = savedStatus[customer.id];
+
+                return (
+                  <div key={customer.id} className="grid grid-cols-12 p-3 items-center hover:bg-slate-50 transition-colors">
+                    <div className="col-span-5 md:col-span-4 font-medium text-slate-900 truncate pr-2">
+                      {customer.name}
+                      {customer.defaultQuantity && customer.defaultQuantity > 0 && (
+                         <span className="block text-[10px] text-slate-400 font-normal">Def: {customer.defaultQuantity}L</span>
+                      )}
+                    </div>
+                    <div className="col-span-3 md:col-span-2 text-right text-slate-500 text-sm">
+                      {customer.rate}
+                    </div>
+                    <div className="col-span-4 md:col-span-3 flex justify-center px-2">
+                      <input 
+                        type="number" 
+                        min="0"
+                        step="0.5"
+                        placeholder="0"
+                        className="w-20 bg-white border border-slate-200 rounded-lg py-2 px-2 text-center font-bold text-slate-900 focus:ring-2 focus:ring-brand-500"
+                        value={qty}
+                        onChange={(e) => handleQuantityChange(customer.id, e.target.value)}
+                        onBlur={() => handleBlur(customer)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                        }}
+                      />
+                    </div>
+                    <div className="hidden md:block col-span-2 text-right font-medium text-slate-900">
+                      {amount}
+                    </div>
+                    <div className="hidden md:flex col-span-1 justify-center">
+                      {isSaved ? (
+                        <Check size={18} className="text-green-500" />
+                      ) : (
+                        <div title="Unsaved" className="w-2 h-2 bg-slate-300 rounded-full"></div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-
-          <div className="divide-y divide-slate-100">
-            {customers.map(customer => {
-              const qty = entries[customer.id] || '';
-              const amount = (Number(qty) * customer.rate).toFixed(0);
-              const isSaved = savedStatus[customer.id];
-
-              return (
-                <div key={customer.id} className="grid grid-cols-12 p-3 items-center hover:bg-slate-50 transition-colors">
-                  <div className="col-span-5 md:col-span-4 font-medium text-slate-900 truncate pr-2">
-                    {customer.name}
-                  </div>
-                  <div className="col-span-3 md:col-span-2 text-right text-slate-500 text-sm">
-                    {customer.rate}
-                  </div>
-                  <div className="col-span-4 md:col-span-3 flex justify-center px-2">
-                    <input 
-                      type="number" 
-                      min="0"
-                      step="0.5"
-                      placeholder="0"
-                      className="w-20 bg-white border border-slate-200 rounded-lg py-2 px-2 text-center font-bold text-slate-900 focus:ring-2 focus:ring-brand-500"
-                      value={qty}
-                      onChange={(e) => handleQuantityChange(customer.id, e.target.value)}
-                      onBlur={() => handleBlur(customer)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                      }}
-                    />
-                  </div>
-                  <div className="hidden md:block col-span-2 text-right font-medium text-slate-900">
-                    {amount}
-                  </div>
-                  <div className="hidden md:flex col-span-1 justify-center">
-                     {isSaved ? <Check size={18} className="text-green-500" /> : <div className="w-2 h-2 bg-slate-300 rounded-full"></div>}
-                  </div>
-                </div>
-              );
-            })}
+          
+          <div className="flex justify-end sticky bottom-20 md:static z-20">
+             <button 
+               onClick={handleSaveAll}
+               disabled={isSavingAll}
+               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-xl shadow-lg shadow-green-600/30 flex items-center gap-2 font-semibold transition-all w-full md:w-auto justify-center"
+             >
+               {isSavingAll ? (
+                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+               ) : (
+                 <SaveAll size={20} />
+               )}
+               {isSavingAll ? 'Saving...' : `Save Daily Log ${unsavedCount > 0 ? `(${unsavedCount} Unsaved)` : ''}`}
+             </button>
           </div>
         </div>
       )}

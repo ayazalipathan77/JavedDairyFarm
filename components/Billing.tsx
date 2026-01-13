@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/db';
 import { Customer, MilkEntry, TransactionType } from '../types';
-import { format, startOfMonth, endOfMonth, isWithinInterval } from 'date-fns';
+import { format, endOfMonth, isWithinInterval } from 'date-fns';
 import { FileText, Share2, Download } from 'lucide-react';
 
 interface BillData {
@@ -24,8 +24,10 @@ export default function Billing() {
 
   const generateBills = async () => {
     setLoading(true);
-    const start = startOfMonth(new Date(selectedMonth));
-    const end = endOfMonth(new Date(selectedMonth));
+    // Parse selectedMonth (yyyy-MM) to get first day of month
+    const [year, month] = selectedMonth.split('-');
+    const start = new Date(parseInt(year), parseInt(month) - 1, 1);
+    const end = endOfMonth(start);
 
     const [customers, allEntries, allTransactions] = await Promise.all([
       dbService.getCustomers(),

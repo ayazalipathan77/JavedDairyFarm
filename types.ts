@@ -4,6 +4,7 @@ export interface Customer {
   phone: string;
   address: string;
   rate: number; // Default rate per liter/kg
+  defaultQuantity?: number; // Default daily quantity to pre-fill
   isActive: boolean;
   createdAt: string;
 }
@@ -48,4 +49,9 @@ export interface AppData {
   customers: Customer[];
   entries: MilkEntry[];
   transactions: LedgerTransaction[];
+}
+
+export enum UserRole {
+  ADMIN = 'ADMIN',
+  USER = 'USER'
 }

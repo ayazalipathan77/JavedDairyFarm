@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/db';
-import { LedgerTransaction, TransactionType, LedgerCategory, Customer } from '../types';
+import { LedgerTransaction, TransactionType, LedgerCategory, Customer, UserRole } from '../types';
 import { format } from 'date-fns';
-import { TrendingDown, TrendingUp, Plus } from 'lucide-react';
+import { TrendingDown, TrendingUp, Plus, Trash2 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Ledger() {
   const [transactions, setTransactions] = useState<LedgerTransaction[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [showForm, setShowForm] = useState(false);
+  const { role } = useAuth();
   
   // Form State
   const [type, setType] = useState<TransactionType>(TransactionType.DEBIT);
@@ -50,6 +52,13 @@ export default function Ledger() {
     setShowForm(false);
     resetForm();
     loadData();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this transaction?')) {
+      await dbService.deleteTransaction(id);
+      loadData();
+    }
   };
 
   const resetForm = () => {
@@ -148,6 +157,7 @@ export default function Ledger() {
                 <th className="px-6 py-4 font-semibold text-slate-600">Description</th>
                 <th className="px-6 py-4 font-semibold text-slate-600">Category</th>
                 <th className="px-6 py-4 font-semibold text-slate-600 text-right">Amount</th>
+                {role === UserRole.ADMIN && <th className="px-6 py-4 font-semibold text-slate-600 text-right">Action</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -169,11 +179,22 @@ export default function Ledger() {
                        {tx.type === TransactionType.CREDIT ? '+' : '-'}${tx.amount.toLocaleString()}
                     </div>
                   </td>
+                  {role === UserRole.ADMIN && (
+                    <td className="px-6 py-4 text-right">
+                      <button 
+                        onClick={() => handleDelete(tx.id)}
+                        className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="Delete Transaction"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
               {transactions.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-6 py-8 text-center text-slate-500">No transactions recorded yet.</td>
+                  <td colSpan={role === UserRole.ADMIN ? 5 : 4} className="px-6 py-8 text-center text-slate-500">No transactions recorded yet.</td>
                 </tr>
               )}
             </tbody>

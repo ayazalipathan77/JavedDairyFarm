@@ -114,6 +114,11 @@ class DBService {
     return this.add('transactions', tx);
   }
 
+  async deleteTransaction(id: string): Promise<void> {
+    await this.ensureInit();
+    return this.delete('transactions', id);
+  }
+
   // --- Backup/Restore ---
 
   async exportData(): Promise<string> {

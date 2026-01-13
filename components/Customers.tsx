@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { dbService } from '../services/db';
-import { Customer } from '../types';
-import { Plus, Search, Phone, MapPin, Edit2, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { Customer, UserRole } from '../types';
+import { Plus, Search, Phone, MapPin, Edit2, Trash2, CheckCircle, XCircle, Droplet } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Customers() {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -13,9 +14,11 @@ export default function Customers() {
     phone: '',
     address: '',
     rate: 100,
+    defaultQuantity: 0,
     isActive: true
   });
   const [editingId, setEditingId] = useState<string | null>(null);
+  const { role } = useAuth();
 
   useEffect(() => {
     loadCustomers();
@@ -36,6 +39,7 @@ export default function Customers() {
       phone: formData.phone || '',
       address: formData.address || '',
       rate: Number(formData.rate) || 0,
+      defaultQuantity: Number(formData.defaultQuantity) || 0,
       isActive: formData.isActive ?? true,
       createdAt: editingId ? (customers.find(c => c.id === editingId)?.createdAt || new Date().toISOString()) : new Date().toISOString()
     };
@@ -43,7 +47,7 @@ export default function Customers() {
     await dbService.saveCustomer(customer);
     setIsModalOpen(false);
     setEditingId(null);
-    setFormData({ name: '', phone: '', address: '', rate: 100, isActive: true });
+    setFormData({ name: '', phone: '', address: '', rate: 100, defaultQuantity: 0, isActive: true });
     loadCustomers();
   };
 
@@ -65,7 +69,7 @@ export default function Customers() {
         <button 
           onClick={() => {
             setEditingId(null);
-            setFormData({ name: '', phone: '', address: '', rate: 100, isActive: true });
+            setFormData({ name: '', phone: '', address: '', rate: 100, defaultQuantity: 0, isActive: true });
             setIsModalOpen(true);
           }}
           className="bg-brand-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-brand-700 transition-colors shadow-sm"
@@ -104,9 +108,11 @@ export default function Customers() {
                   </div>
                 </div>
               </div>
-              <button onClick={() => handleEdit(customer)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg">
-                <Edit2 size={18} />
-              </button>
+              {role === UserRole.ADMIN && (
+                <button onClick={() => handleEdit(customer)} className="p-2 text-slate-400 hover:text-brand-600 hover:bg-brand-50 rounded-lg">
+                  <Edit2 size={18} />
+                </button>
+              )}
             </div>
             
             <div className="space-y-2 text-sm text-slate-600">
@@ -126,8 +132,9 @@ export default function Customers() {
               <div className="text-xs text-slate-500">
                 Rate: <span className="font-semibold text-slate-900">${customer.rate}/L</span>
               </div>
-              <div className="text-xs text-slate-400">
-                Added {format(new Date(customer.createdAt), 'MMM yyyy')}
+              <div className="text-xs text-slate-500 flex items-center gap-1">
+                <Droplet size={12} className="text-blue-400" />
+                Def: <span className="font-semibold text-slate-900">{customer.defaultQuantity || 0}L</span>
               </div>
             </div>
           </div>
@@ -145,7 +152,7 @@ export default function Customers() {
                 <input 
                   required
                   type="text" 
-                  className="w-full px-3 py-2 bg-white border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                 />
@@ -156,7 +163,7 @@ export default function Customers() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Phone (WhatsApp)</label>
                   <input 
                     type="tel" 
-                    className="w-full px-3 py-2 bg-white border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                     value={formData.phone}
                     onChange={e => setFormData({...formData, phone: e.target.value})}
                   />
@@ -165,17 +172,33 @@ export default function Customers() {
                   <label className="block text-sm font-medium text-slate-700 mb-1">Rate / Unit</label>
                   <input 
                     type="number" 
-                    className="w-full px-3 py-2 bg-white border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                     value={formData.rate}
                     onChange={e => setFormData({...formData, rate: parseFloat(e.target.value)})}
                   />
                 </div>
               </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Default Quantity (L)</label>
+                <div className="relative">
+                  <Droplet className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input 
+                    type="number" 
+                    step="0.5"
+                    className="w-full pl-10 pr-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                    value={formData.defaultQuantity}
+                    onChange={e => setFormData({...formData, defaultQuantity: parseFloat(e.target.value)})}
+                    placeholder="0"
+                  />
+                </div>
+                <p className="text-xs text-slate-500 mt-1">Automatically pre-fills the daily entry quantity.</p>
+              </div>
 
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Address</label>
                 <textarea 
-                  className="w-full px-3 py-2 bg-white border rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
+                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none"
                   rows={2}
                   value={formData.address}
                   onChange={e => setFormData({...formData, address: e.target.value})}
